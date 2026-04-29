@@ -47,8 +47,9 @@ A public deployment is available at [tfj-aurora-play.netlify.app](https://tfj-au
 4. **Access the app**:
    Open your browser and navigate to `http://127.0.0.1:4321`.
 
-   > [!IMPORTANT]
-   > It is recommended to use `127.0.0.1` locally instead of `localhost` because Spotify's Redirect URIs only allow specific non-HTTPS sites, and `localhost` can sometimes cause issues with authentication.
+
+> [!IMPORTANT]
+> It is recommended to use `127.0.0.1` locally instead of `localhost` because Spotify's Redirect URIs only allow specific non-HTTPS sites, and `localhost` can sometimes cause issues with authentication.
 
 ## Configuration (Spotify Setup)
 
