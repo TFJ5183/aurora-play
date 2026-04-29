@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Settings, Copy, Check, Sun, Moon, Monitor } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Settings, Copy, Check, Sun, Moon, Monitor, LogOut, ChevronRightIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -7,22 +7,39 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Slider } from "@/components/ui/slider";
-import { getClientId, setClientId, getRedirectUri, isAuthenticated } from "@/lib/spotify";
+import { getClientId, setClientId, getRedirectUri, isAuthenticated, logout } from "@/lib/spotify";
 import {
-  getPercentMode, setPercentMode, type PercentMode,
-  getPercentDigits, setPercentDigits,
+  getPercentDigits, setPercentDigits, formatPercentage
 } from "@/lib/preferences";
 import { toast } from "sonner";
+import { useStore } from "@nanostores/react";
+import { $authed } from "@/lib/store.ts";
 
-export function SettingsDialog() {
+// Props typ
+interface Props {
+  trigger?: React.ReactNode;
+}
+
+export function SettingsDialog({ trigger }: Props): React.JSX.Element {
   const [open, setOpen] = useState(false);
-  const authed = isAuthenticated();
+  const authed = useStore($authed);
   const [value, setValue] = useState(getClientId());
-  const [pct, setPct] = useState<PercentMode>(getPercentMode());
   const [digits, setDigits] = useState<number>(getPercentDigits());
   const [copied, setCopied] = useState(false);
   const { theme, setTheme } = useTheme();
   const redirect = getRedirectUri();
+
+  useEffect(() => {
+    $authed.set(isAuthenticated());
+  }, []);
+
+  // On logout
+  const onLogout = () => {
+    logout();
+    $authed.set(false);
+    toast.success("Logged out");
+    setOpen(false);
+  };
 
   const copyRedirect = async () => {
     await navigator.clipboard.writeText(redirect);
@@ -30,9 +47,9 @@ export function SettingsDialog() {
     setTimeout(() => setCopied(false), 1500);
   };
 
+  // Saves
   const save = () => {
     if (!authed) setClientId(value);
-    setPercentMode(pct);
     setPercentDigits(digits);
     toast.success("Settings saved");
     setOpen(false);
@@ -40,11 +57,15 @@ export function SettingsDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
+      {/* Trigger */}
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Settings" className="rounded-full glass">
-          <Settings className="h-5 w-5" />
-        </Button>
+        {trigger || (
+          <Button variant="ghost" size="icon" aria-label="Settings" className="rounded-full glass">
+            <Settings className="h-5 w-5" />
+          </Button>
+        )}
       </DialogTrigger>
+      {/* Content */}
       <DialogContent className="glass max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="text-xl tracking-tight">Settings</DialogTitle>
@@ -112,48 +133,37 @@ export function SettingsDialog() {
 
           {/* Percentage display */}
           <div className="space-y-2">
-            <Label>Song progress percentage</Label>
-            <RadioGroup value={pct} onValueChange={(v) => setPct(v as PercentMode)} className="grid grid-cols-2 gap-2">
-              <label className={`cursor-pointer rounded-xl border p-3 text-sm transition ${pct === "hidden" ? "border-primary bg-primary/5" : "border-border/60 hover:bg-muted/40"}`}>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="hidden" id="pct-hidden" />
-                  <span className="font-medium">Hidden</span>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground pl-6">No percentage shown</p>
-              </label>
-              <label className={`cursor-pointer rounded-xl border p-3 text-sm transition ${pct === "digits" ? "border-primary bg-primary/5" : "border-border/60 hover:bg-muted/40"}`}>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="digits" id="pct-digits" />
-                  <span className="font-medium">Digits</span>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground pl-6">Show percentage</p>
-              </label>
-            </RadioGroup>
-
-            {pct === "digits" && (
-              <div className="rounded-xl border border-border/60 p-4 mt-2 space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="digits-slider" className="text-sm">Number of digits</Label>
-                  <span className="text-sm tabular-nums text-primary font-medium">
-                    {digits} → {digits <= 3
-                      ? "042".slice(-digits).padStart(digits, "0") + "%"
-                      : (42).toFixed(digits - 3).padStart(digits + 1, "0") + "%"}
-                  </span>
-                </div>
-                <Slider
-                  id="digits-slider"
-                  min={1}
-                  max={6}
-                  step={1}
-                  value={[digits]}
-                  onValueChange={(v) => setDigits(v[0])}
-                />
-              </div>
-            )}
+            <div className="flex items-center justify-between">
+              <Label htmlFor="digits-slider" className="text-base font-semibold tracking-tight">Song progress percentage</Label>
+              <span className="text-sm tabular-nums text-primary font-medium">
+                {digits === -1 ? "Hidden" : `${digits} - ${formatPercentage(42.1234, digits)}`}
+              </span>
+            </div>
+            <div className="rounded-xl border border-border/60 p-4 mt-2">
+              <Slider
+                id="digits-slider"
+                min={-1}
+                max={3}
+                step={1}
+                value={[digits]}
+                onValueChange={(v) => setDigits(v[0])}
+              />
+              <p className="mt-4 text-xs text-muted-foreground">
+                Set to <strong>-1</strong> to hide the percentage display. 0-3 defines the number of decimal places.
+              </p>
+            </div>
           </div>
         </div>
 
-        <DialogFooter>
+        {/* Footer */}
+        <DialogFooter className="flex flex-row items-center justify-between sm:justify-between gap-2">
+          {authed && (
+            <Button variant="destructive" onClick={onLogout} className="rounded-full px-6">
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </Button>
+          )}
+          <div className="flex-1" />
           <Button onClick={save} disabled={!authed && !value.trim()} className="rounded-full px-6">Save</Button>
         </DialogFooter>
       </DialogContent>

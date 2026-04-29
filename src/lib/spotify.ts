@@ -1,20 +1,27 @@
-// Spotify Authorization Code with PKCE — fully frontend.
+// Localstorage keys
 const CLIENT_ID_KEY = "spotify_client_id"
 const TOKEN_KEY = "spotify_access_token"
 const REFRESH_KEY = "spotify_refresh_token"
 const EXPIRES_KEY = "spotify_expires_at"
 const VERIFIER_KEY = "spotify_pkce_verifier"
 
-export const SCOPES = [
+// Spotify scopes
+export const SCOPES: string = [
   "user-read-currently-playing",
   "user-read-playback-state",
 ].join(" ")
 
-export const getClientId = () => localStorage.getItem(CLIENT_ID_KEY) || ""
-export const setClientId = (id: string) =>
-  localStorage.setItem(CLIENT_ID_KEY, id.trim())
+// Checks if is browser
+const isBrowser = typeof window !== "undefined"
 
-export const getRedirectUri = () => `${window.location.origin}/`
+export const getClientId = () =>
+  isBrowser ? localStorage.getItem(CLIENT_ID_KEY) || "" : ""
+export const setClientId = (id: string) =>
+  isBrowser && localStorage.setItem(CLIENT_ID_KEY, id.trim())
+
+// Gets redirect uri
+export const getRedirectUri = () =>
+  isBrowser ? `${window.location.origin}/` : ""
 
 function base64url(bytes: ArrayBuffer) {
   return btoa(String.fromCharCode(...new Uint8Array(bytes)))
@@ -23,16 +30,19 @@ function base64url(bytes: ArrayBuffer) {
     .replace(/\//g, "_")
 }
 
+// Hashes to SHA256
 async function sha256(input: string) {
   return await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input))
 }
 
-function randomString(len = 64) {
+// Generates random string
+function randomString(len = 64): string {
   const arr = new Uint8Array(len)
   crypto.getRandomValues(arr)
   return base64url(arr.buffer).slice(0, len)
 }
 
+// Starts login
 export async function beginLogin() {
   const clientId = getClientId()
   if (!clientId) throw new Error("Missing Spotify Client ID")
@@ -41,6 +51,7 @@ export async function beginLogin() {
   const challenge = base64url(await sha256(verifier))
   sessionStorage.setItem(VERIFIER_KEY, verifier)
 
+  // Generates parms
   const params = new URLSearchParams({
     client_id: clientId,
     response_type: "code",
@@ -50,13 +61,17 @@ export async function beginLogin() {
     scope: SCOPES,
   })
 
+  // Redirect
   window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`
 }
 
+// Handles redirect callback
 export async function handleRedirectCallback(): Promise<boolean> {
   const url = new URL(window.location.href)
   const code = url.searchParams.get("code")
   const error = url.searchParams.get("error")
+
+  // Failed
   if (error) {
     console.error("Spotify auth error:", error)
     window.history.replaceState({}, "", url.pathname)
@@ -93,27 +108,34 @@ export async function handleRedirectCallback(): Promise<boolean> {
   return true
 }
 
+// Saves token
 function saveTokens(data: {
   access_token: string
   refresh_token?: string
   expires_in: number
-}) {
+}): void {
+  if (!isBrowser) return
   localStorage.setItem(TOKEN_KEY, data.access_token)
   if (data.refresh_token) localStorage.setItem(REFRESH_KEY, data.refresh_token)
   localStorage.setItem(EXPIRES_KEY, String(Date.now() + data.expires_in * 1000))
 }
 
-export function isAuthenticated() {
-  return !!localStorage.getItem(TOKEN_KEY)
+// Checks if user is authenticated
+export function isAuthenticated(): boolean {
+  return isBrowser ? !!localStorage.getItem(TOKEN_KEY) : false
 }
 
-export function logout() {
+// Logs out user
+export function logout(): void {
+  if (!isBrowser) return
   ;[TOKEN_KEY, REFRESH_KEY, EXPIRES_KEY].forEach((k) =>
     localStorage.removeItem(k)
   )
 }
 
+// Refreshes access token
 async function refreshAccessToken(): Promise<string | null> {
+  if (!isBrowser) return null
   const refresh = localStorage.getItem(REFRESH_KEY)
   const clientId = getClientId()
   if (!refresh || !clientId) return null
@@ -122,28 +144,45 @@ async function refreshAccessToken(): Promise<string | null> {
     grant_type: "refresh_token",
     refresh_token: refresh,
   })
-  const res = await fetch("https://accounts.spotify.com/api/token", {
+
+  // Fetch
+  const res: Response = await fetch("https://accounts.spotify.com/api/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
   })
-  if (!res.ok) return null
+
+  // Request not okay
+  if (!res.ok) {
+    return null
+  }
+
+  // Parses data
   const data = await res.json()
+
+  // Saves token
   saveTokens(data)
+
+  // Returns access token
   return data.access_token
 }
 
+// Gets or create valid token
 async function getValidToken(): Promise<string | null> {
-  const token = localStorage.getItem(TOKEN_KEY)
-  const exp = Number(localStorage.getItem(EXPIRES_KEY) || 0)
-  if (token && Date.now() < exp - 30_000) return token
+  if (!isBrowser) return null
+  const token: string | null = localStorage.getItem(TOKEN_KEY)
+  const expires: number = Number(localStorage.getItem(EXPIRES_KEY) || 0)
+  if (token && Date.now() < expires - 30_000) return token
   return await refreshAccessToken()
 }
 
+// Artist typ
 export interface ArtistRef {
   name: string
   url?: string
 }
+
+// Not playing typ
 export interface NowPlaying {
   isPlaying: boolean
   title: string
@@ -156,23 +195,44 @@ export interface NowPlaying {
   trackUrl?: string
 }
 
+// Fetches play state
 export async function fetchNowPlaying(): Promise<NowPlaying | null> {
   const token = await getValidToken()
   if (!token) return null
+
+  // Fetches api
   const res = await fetch(
     "https://api.spotify.com/v1/me/player/currently-playing",
     {
       headers: { Authorization: `Bearer ${token}` },
     }
   )
-  if (res.status === 204) return null // Nothing playing
+
+  // Nothing playing
+  if (res.status === 204) {
+    return null
+  }
+
+  // Not authorized
   if (res.status === 401) {
     logout()
     return null
   }
-  if (!res.ok) return null
+
+  // Request not okay
+  if (!res.ok) {
+    return null
+  }
+
+  // Parses data
   const data = await res.json()
-  if (!data || !data.item) return null
+
+  // No data received
+  if (!data || !data.item) {
+    return null
+  }
+
+  // Creates entity
   return {
     isPlaying: !!data.is_playing,
     title: data.item.name,

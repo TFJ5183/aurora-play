@@ -1,43 +1,32 @@
-// User UI preferences stored in localStorage.
 import { useEffect, useState } from "react"
 
-export type PercentMode = "hidden" | "digits"
-const KEY = "auroraplay_percent_mode"
+// Localstorage key
 const DIGITS_KEY = "auroraplay_percent_digits"
 
-export function getPercentMode(): PercentMode {
-  const v = localStorage.getItem(KEY)
-  return v === "digits" ? "digits" : "hidden"
+// Checks if browser
+const isBrowser: boolean = typeof window !== "undefined"
+
+// Formats parentage
+export function formatPercentage(value: number, digits: number): string {
+  if (digits === -1) return ""
+  return value.toFixed(digits) + "%"
 }
 
-export function setPercentMode(mode: PercentMode) {
-  localStorage.setItem(KEY, mode)
-  window.dispatchEvent(new CustomEvent("auroraplay:prefs"))
-}
-
+// Gets percent digits
 export function getPercentDigits(): number {
-  const v = Number(localStorage.getItem(DIGITS_KEY))
-  if (!v || v < 1 || v > 6) return 3
-  return v
+  if (!isBrowser) return 0
+  const v = localStorage.getItem(DIGITS_KEY)
+  if (v === null) return 0
+  const n = Number(v)
+  if (isNaN(n) || n < -1 || n > 3) return 0
+  return n
 }
 
-export function setPercentDigits(n: number) {
+// Sets percent digits
+export function setPercentDigits(n: number): void {
+  if (!isBrowser) return
   localStorage.setItem(DIGITS_KEY, String(n))
   window.dispatchEvent(new CustomEvent("auroraplay:prefs"))
-}
-
-export function usePercentMode(): PercentMode {
-  const [mode, setMode] = useState<PercentMode>(getPercentMode())
-  useEffect(() => {
-    const handler = () => setMode(getPercentMode())
-    window.addEventListener("auroraplay:prefs", handler)
-    window.addEventListener("storage", handler)
-    return () => {
-      window.removeEventListener("auroraplay:prefs", handler)
-      window.removeEventListener("storage", handler)
-    }
-  }, [])
-  return mode
 }
 
 export function usePercentDigits(): number {

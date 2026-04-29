@@ -1,0 +1,17 @@
+---
+import LogoHeader from "./LogoHeader.tsx"
+import HeaderActions from "./HeaderActions.tsx"
+
+interface Props {
+  isLogoExpanded?: boolean;
+}
+
+const { isLogoExpanded = false } = Astro.props;
+---
+
+<header>
+  <LogoHeader client:load isExpanded={isLogoExpanded} />
+  <div class="absolute top-10 right-10 z-50">
+    <HeaderActions client:load />
+  </div>
+</header>

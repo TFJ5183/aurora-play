@@ -1,140 +1,167 @@
-import { useEffect, useState, Fragment } from "react";
-import { fetchNowPlaying, type NowPlaying } from "@/lib/spotify";
-import { Music2 } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
-import { usePercentMode, usePercentDigits } from "@/lib/preferences";
+import React, { Fragment, useEffect, useState } from "react"
+import { fetchNowPlaying, type NowPlaying } from "@/lib/spotify"
+import { Music2 } from "lucide-react"
+import { Progress } from "@/components/ui/progress"
+import { formatPercentage, usePercentDigits } from "@/lib/preferences" // Formats time
 
-function fmt(ms: number) {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  return `${m}:${String(s % 60).padStart(2, "0")}`;
+// Formats time
+function formatTime(ms: number): string {
+  const seconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(seconds / 60)
+  return `${minutes}:${String(seconds % 60).padStart(2, "0")}`
 }
 
+// Props typ
 interface Props {
-  onTrackChange?: (data: NowPlaying | null) => void;
+  onTrackChange?: (data: NowPlaying | null) => void
 }
 
-export function NowPlayingCard({ onTrackChange }: Props) {
-  const [data, setData] = useState<NowPlaying | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [tick, setTick] = useState(0);
-  const percentMode = usePercentMode();
-  const percentDigits = usePercentDigits();
+// Main component
+export function NowPlayingCard({ onTrackChange }: Props): React.JSX.Element {
+  const [data, setData] = useState<NowPlaying | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [tick, setTick] = useState(0)
+  const percentDigits = usePercentDigits()
 
   useEffect(() => {
-    let mounted = true;
+    let mounted = true
     const load = async () => {
-      const d = await fetchNowPlaying();
-      if (!mounted) return;
-      setData(d);
-      setLoading(false);
-      onTrackChange?.(d);
-    };
-    load();
-    const poll = setInterval(load, 2000);
-    const timer = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => { mounted = false; clearInterval(poll); clearInterval(timer); };
-  }, [onTrackChange]);
+      const d = await fetchNowPlaying()
+      if (!mounted) return
+      setData(d)
+      setLoading(false)
+      onTrackChange?.(d)
+      // Reset tick when we get fresh data from Spotify
+      setTick(0)
+    }
+    load()
+    const poll = setInterval(load, 5000)
+    const timer = setInterval(() => setTick((t) => t + 100), 100)
+    return () => {
+      mounted = false
+      clearInterval(poll)
+      clearInterval(timer)
+    }
+  }, [onTrackChange])
 
+  // Calculates progress
   const progress = data?.isPlaying
-    ? Math.min(data.progressMs + tick * 1000, data.durationMs)
-    : data?.progressMs ?? 0;
+    ? Math.min(data.progressMs + tick, data.durationMs)
+    : (data?.progressMs ?? 0)
 
+  // Skeleton
   if (loading) {
-    return <div className="glass rounded-3xl p-8 w-full animate-pulse h-[420px]" />;
+    return (
+      <div className="shadow-glow mx-auto h-[400px] w-full max-w-[800px] min-w-[300px] animate-pulse rounded-3xl bg-card/25 p-8 backdrop-blur-2xl" />
+    )
   }
 
+  // Nothing playing
   if (!data) {
     return (
-      <div className="glass rounded-3xl p-10 w-full text-center shadow-glow">
-        <div className="mx-auto w-16 h-16 rounded-2xl glass flex items-center justify-center mb-4">
+      <div className="shadow-glow mx-auto w-full max-w-[500px] rounded-3xl bg-card/25 p-10 text-center backdrop-blur-2xl">
+        <div className="shadow-glow mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-card/25">
           <Music2 className="h-7 w-7 text-primary" />
         </div>
-        <h2 className="text-2xl font-semibold mb-2 tracking-tight">Nothing playing</h2>
+        <h2 className="mb-2 text-2xl font-semibold tracking-tight">
+          Nothing playing
+        </h2>
         <p className="text-muted-foreground">
-          Start playing a track in Spotify — it will appear here within a few seconds.
+          Start playing a track in Spotify — it will appear here within a few
+          seconds.
         </p>
       </div>
-    );
+    )
   }
 
-  const pct = data.durationMs ? (progress / data.durationMs) * 100 : 0;
-  const pctLabel = pct.toFixed(Math.max(0, percentDigits - 3)).padStart(percentDigits + (percentDigits > 3 ? 1 : 0), "0");
-  // Simpler: format as fixed integer or with decimals
-  const formatPct = (digits: number) => {
-    if (digits <= 3) {
-      return String(Math.min(100, Math.floor(pct))).padStart(digits, "0");
-    }
-    const decimals = digits - 3;
-    return Math.min(100, pct).toFixed(decimals).padStart(digits + 1, "0");
-  };
-
-  const linkCls = "hover:underline decoration-primary/60 underline-offset-4";
+  const percentage = data.durationMs ? (progress / data.durationMs) * 100 : 0
+  const linkCls = "hover:underline decoration-primary/60 underline-offset-4"
 
   return (
-    <div className="glass rounded-[2rem] p-6 sm:p-10 w-full shadow-glow">
-      <div className="flex flex-col sm:flex-row gap-8 items-center sm:items-start">
-        <div className="relative shrink-0">
-          {data.cover ? (
-            <a href={data.trackUrl} target="_blank" rel="noreferrer" aria-label="Open track in Spotify">
-              <img
-                src={data.cover}
-                alt={`${data.album} cover`}
-                className="w-52 h-52 sm:w-60 sm:h-60 rounded-2xl object-cover shadow-glow ring-1 ring-white/10 transition-transform hover:scale-[1.02]"
-              />
-            </a>
-          ) : (
-            <div className="w-52 h-52 rounded-2xl bg-muted flex items-center justify-center">
-              <Music2 className="h-10 w-10 text-muted-foreground" />
-            </div>
-          )}
-          {data.isPlaying && (
-            <span className="absolute -bottom-2 -right-2 glass rounded-full px-3 py-1 text-[11px] font-medium text-primary flex items-center gap-1.5">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
-              </span>
-              Live
-            </span>
-          )}
-        </div>
+    <div className="shadow-glow mx-auto flex max-w-[1200px] min-w-[700px] items-center gap-0 overflow-hidden rounded-xl border bg-background/5 dark:bg-card/25 backdrop-blur-2xl">
+      {/* Cover container */}
+      <div className="relative">
+        {/* Cover */}
+        {data.cover ? (
+          <img
+            src={data.cover}
+            alt={`${data.album} cover`}
+            className="shadow-glow h-52 w-52 rounded-md object-cover transition-transform hover:scale-[1.02] sm:h-60 sm:w-60"
+          />
+        ) : (
+          <div className="flex h-52 w-52 items-center justify-center rounded-2xl bg-muted">
+            <Music2 className="h-10 w-10 text-muted-foreground" />
+          </div>
+        )}
+      </div>
 
-        <div className="flex-1 min-w-0 w-full text-center sm:text-left">
-          {data.albumUrl ? (
-            <a href={data.albumUrl} target="_blank" rel="noreferrer" className={`text-[11px] uppercase tracking-[0.2em] text-muted-foreground mb-2 inline-block ${linkCls}`}>
-              {data.album}
-            </a>
-          ) : (
-            <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground mb-2">{data.album}</p>
-          )}
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight leading-tight truncate">
-            {data.trackUrl ? (
-              <a href={data.trackUrl} target="_blank" rel="noreferrer" className={linkCls}>{data.title}</a>
-            ) : data.title}
-          </h1>
-          <p className="mt-2 text-lg text-muted-foreground truncate">
-            {data.artists.map((a, i) => (
-              <Fragment key={i}>
-                {i > 0 && ", "}
-                {a.url ? (
-                  <a href={a.url} target="_blank" rel="noreferrer" className={linkCls}>{a.name}</a>
-                ) : a.name}
-              </Fragment>
-            ))}
+      {/* Right container */}
+      <div className="w-full min-w-0 flex-1 p-5 text-center sm:text-left">
+        {/* Album */}
+        {data.albumUrl ? (
+          <a
+            href={data.albumUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={`mb-2 inline-block text-[11px] tracking-[0.2em] text-muted-foreground uppercase ${linkCls}`}
+          >
+            {data.album}
+          </a>
+        ) : (
+          <p className="mb-2 text-[11px] tracking-[0.2em] text-muted-foreground uppercase">
+            {data.album}
           </p>
-
-          <div className="mt-8 space-y-2">
-            <Progress value={pct} className="h-1.5" />
-            <div className="flex justify-between items-center text-xs tabular-nums text-muted-foreground">
-              <span>{fmt(progress)}</span>
-              {percentMode === "digits" && (
-                <span className="text-primary font-medium">{formatPct(percentDigits)}%</span>
+        )}
+        {/* Title */}
+        <h1 className="max-w-max truncate font-mono text-3xl leading-tight font-bold tracking-tight sm:text-4xl">
+          {data.trackUrl ? (
+            <a
+              href={data.trackUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={linkCls}
+            >
+              {data.title}
+            </a>
+          ) : (
+            data.title
+          )}
+        </h1>
+        {/* Artists */}
+        <p className="mt-2 overflow-clip text-lg text-muted-foreground">
+          {data.artists.map((a, i) => (
+            <Fragment key={i}>
+              {i > 0 && ", "}
+              {a.url ? (
+                <a
+                  href={a.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={linkCls}
+                >
+                  {a.name}
+                </a>
+              ) : (
+                a.name
               )}
-              <span>{fmt(data.durationMs)}</span>
-            </div>
+            </Fragment>
+          ))}
+        </p>
+
+        {/* Progress slider */}
+        <div className="mt-8 space-y-2">
+          <Progress value={percentage} className="h-1.5 [&>div]:bg-chart-1" />
+          <div className="flex items-center justify-between text-xs text-muted-foreground tabular-nums">
+            <span>{formatTime(progress)}</span>
+            {percentDigits !== -1 && (
+              <span className="font-medium text-chart-1">
+                {formatPercentage(percentage, percentDigits)}
+              </span>
+            )}
+            <span>{formatTime(data.durationMs)}</span>
           </div>
         </div>
       </div>
     </div>
-  );
+  )
 }

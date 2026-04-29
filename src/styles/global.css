@@ -5,6 +5,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Variables */
 @theme inline {
     --font-heading: var(--font-serif);
     --font-serif: 'Roboto Slab Variable', serif;
@@ -48,6 +49,7 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* White-mode */
 :root {
     --background: oklch(1 0 0);
     --foreground: oklch(0.141 0.005 285.823);
@@ -83,6 +85,7 @@
     --sidebar-ring: oklch(0.705 0.015 286.067);
 }
 
+/* Dark-mode */
 .dark {
     --background: oklch(0.141 0.005 285.823);
     --foreground: oklch(0.985 0 0);
@@ -118,16 +121,19 @@
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
+    * {
+        @apply border-border outline-ring/50;
     }
-  body {
-    @apply bg-background text-foreground;
+
+    body {
+        @apply bg-background text-foreground;
     }
-  button:not(:disabled), [role="button"]:not(:disabled) {
-    cursor: pointer;
+
+    button:not(:disabled), [role="button"]:not(:disabled) {
+        cursor: pointer;
     }
-  html {
-    @apply font-serif;
+
+    html {
+        @apply font-serif;
     }
 }
